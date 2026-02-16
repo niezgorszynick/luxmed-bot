@@ -1,18 +1,15 @@
-# Stage 1: Build the application
-# Using a verified image from sbtscala
-FROM sbtscala/scala-sbt:eclipse-temurin-jammy-11.0.17_1.8.0_2.13.10 AS builder
+# Stage 1: Build the application using Gradle
+FROM gradle:7.6-jdk11 AS builder
 
 WORKDIR /build
 
-# Copy the build files first to cache dependencies
-COPY project/ /build/project/
-COPY build.sbt /build/build.sbt
-COPY common/ /build/common/
-COPY bot/ /build/bot/
+# Copy the Gradle configuration and source code
+COPY build.gradle settings.gradle ./
+COPY common/ ./common/
+COPY bot/ ./bot/
 
-# Build the fat jar (assembly)
-# Note: assembly is a plugin task usually configured in the project
-RUN sbt "bot/assembly"
+# Build the shadowJar (this is the Gradle equivalent of sbt assembly)
+RUN gradle :bot:shadowJar --no-daemon
 
 # Stage 2: Run the application
 FROM eclipse-temurin:11-jre-focal
@@ -24,8 +21,8 @@ RUN ln -fs /usr/share/zoneinfo/Europe/Warsaw /etc/localtime && \
 WORKDIR /app
 
 # Copy the built jar from the builder stage
-# We use a wildcard to match the specific version generated
-COPY --from=builder /build/bot/target/scala-2.13/luxmed-bot-assembly-*.jar /app/server.jar
+# Gradle usually puts shadow jars in bot/build/libs/
+COPY --from=builder /build/bot/build/libs/luxmed-bot-all.jar /app/server.jar
 COPY docker/run.sh /app/run.sh
 RUN echo "1.0.0" > /app/version
 
